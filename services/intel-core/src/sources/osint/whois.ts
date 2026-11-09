@@ -21,7 +21,14 @@ async function fetchWhois(params: Record<string, string> = {}): Promise<SourceRe
 
   const payload: WhoisPayload = { domain };
 
-  const rdap = await fetchJson<any>(`https://rdap.org/domain/${encodeURIComponent(domain)}`, { timeoutMs: 8000 });
+  // rdap.org redirects to the registry's own RDAP server (Verisign, etc.),
+  // and at least Verisign's returns 403 to Node's default fetch User-Agent
+  // while accepting curl's — set an explicit one so the redirect target
+  // doesn't reject the request.
+  const rdap = await fetchJson<any>(`https://rdap.org/domain/${encodeURIComponent(domain)}`, {
+    timeoutMs: 8000,
+    headers: { 'User-Agent': 'IntelCore/0.1' },
+  });
   if (rdap) {
     const events = (rdap.events || []).map((e: any) => ({ action: e.eventAction, date: e.eventDate }));
     payload.registration = events.find((e: any) => e.action === 'registration')?.date;

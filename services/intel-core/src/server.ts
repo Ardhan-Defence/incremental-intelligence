@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { SOURCES, listSources } from './sources/registry.js';
 import { addWatchlistEntry, listAlerts, listWatchlist, removeWatchlistEntry, runCheck, startScheduler } from './watchlist/engine.js';
 import type { WatchlistKind } from './watchlist/types.js';
+import { investigate } from './profile/investigate.js';
 
 const PORT = Number(process.env.PORT || 4100);
 const VALID_KINDS: WatchlistKind[] = ['domain', 'ip', 'mastodon-hashtag', 'telegram-channel'];
@@ -97,6 +98,17 @@ const server = createServer(async (req, res) => {
     return sendJson(res, 200, { alerts: listAlerts(params.since) });
   }
 
+  // ── Single-entry-point profile synthesis ──
+  if (url.pathname === '/v1/investigate' && req.method === 'GET') {
+    if (!params.target) return sendJson(res, 400, { error: 'target query parameter is required' });
+    try {
+      const profile = await investigate(params.target);
+      return sendJson(res, 200, profile);
+    } catch (err) {
+      return sendJson(res, 500, { error: String(err) });
+    }
+  }
+
   const match = url.pathname.match(/^\/v1\/([a-z0-9-]+)$/);
   if (match) {
     const source = SOURCES[match[1]];
@@ -125,4 +137,5 @@ server.listen(PORT, () => {
   console.log(`  DEL  /v1/watchlist/<id>      — remove one`);
   console.log(`  POST /v1/watchlist/<id>/check — run a check immediately, bypassing the schedule`);
   console.log(`  GET  /v1/alerts              — list alerts (optional ?since=<ISO timestamp>)`);
+  console.log(`  GET  /v1/investigate?target=<anything> — single-input profile synthesis`);
 });

@@ -19,6 +19,50 @@ npm run dev     # tsx watch, http://localhost:4100
 - `GET /v1/watchlist` / `POST /v1/watchlist` / `DELETE /v1/watchlist/<id>` — manage watchlist entries.
 - `POST /v1/watchlist/<id>/check` — run a check immediately instead of waiting for its schedule.
 - `GET /v1/alerts` (optional `?since=<ISO timestamp>`) — list alerts generated so far.
+- `GET /v1/investigate?target=<anything>` — single-input profile synthesis (see below).
+
+## Profile synthesis (`src/profile/`)
+
+The single entry point: give it anything — an IP, a domain, a phone number,
+an email, a `t.me/<channel>` or `https://<instance>/@<handle>` URL, a bare
+username — and it classifies the input, fans out to whichever existing
+sources apply, and returns one normalized `Profile`: sections of labeled
+claims, each tagged `confirmed` / `reported` / `unavailable`, plus an explicit
+`gaps` array naming what this profile does *not* cover for that target kind.
+The gaps array is the important part — it's there so a missing capability is
+a visible field in the response, not a silent omission a user has to notice
+on their own.
+
+**What's wired up today, by classified kind:**
+- `ip` → `osint-bgp` (network/ASN ownership) + `threat-intel` (Tor exit, OTX pulses)
+- `domain` / `email` (profiles the domain half) → `osint-whois` + `osint-certs` + `osint-dns` + `threat-intel`
+- `phone` → `libphonenumber-js` (validity, country, line type, formatting only — no carrier or account linkage; see the gap it reports)
+- `mastodon-profile` (a `/@handle` URL) → new account-lookup helper in `sources/social/mastodon.ts` (`/api/v1/accounts/lookup` + recent public statuses — both public, keyless endpoints)
+- `telegram-channel` (a `t.me/...` URL) → the existing `social-telegram` source
+- `username` (no platform given) → returns an empty profile with a gap explicitly naming the reason: cross-platform account discovery needs the Maigret enrichment runner, not yet built (see "Correlation plan" below)
+
+**A real bug this surfaced and fixed:** `osint-whois`'s RDAP call was
+returning empty registration/expiration data for every domain — rdap.org
+redirects to the registry's own RDAP server (e.g. Verisign's), which was
+returning 403 to Node's default fetch `User-Agent` while accepting curl's.
+Fixed by setting an explicit User-Agent on that request.
+
+## Correlation plan (tools evaluated, not yet built)
+
+Reviewed six tools as candidates for a cross-platform "enrichment runners"
+service that `investigate()` would call into for the `username` case:
+
+- **Maigret** (MIT, actively maintained) — the recommended first build. Checks a username against 3,000+ sites.
+- **Google libphonenumber** — already integrated directly (see above); it's a parsing library, not a recon tool, so it didn't need its own service.
+- **Maltego CE** — not something to embed; its license forbids commercial use. Better fit: expose `investigate()`'s output *to* Maltego as a custom transform later.
+- **Social-Analyzer** — AGPL-3.0, likely stale — holding on this pending a license decision (AGPL's network-use clause is a real conflict with a commercial product; get this confirmed with counsel before building on it).
+- **PhoneInfoga** — GPL-3.0, and historically fragile against Google's anti-scraping (its own docs note getting blocked/captcha'd) — holding.
+- **Ignorant** — deliberately **not** building this. It works by probing platforms' own password-reset/account-recovery endpoints to infer registration — a materially different (and riskier) mechanism than anything else in this service, not just a licensing question.
+
+None of these six are built yet. `enrichment-runners` would be a separate
+service (Python runtime, isolated license exposure), called by `intel-core`
+over the network the same way it calls any external API — not imported
+directly into this codebase.
 
 ## Scope of this pass
 
