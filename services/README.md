@@ -3,11 +3,11 @@
 ```
 services/
   foundation/           # shared by every module — nothing module-specific
-    intel-core/           normalized multi-source aggregation (25 sources)
-    enrichment-runners/    Maigret (Python) — cross-platform username discovery
-    [planned] entity-resolution/   Splink — probabilistic record linkage
-    [planned] graph-store/          Neo4j CE — relationships between resolved entities
-    [planned] governance/            auth, OPA/ABAC, audit log — needed by every module
+    intel-core/            normalized multi-source aggregation (25 sources)
+    enrichment-runners/     Maigret (Python) — cross-platform username discovery
+    entity-resolution/      Splink — probabilistic record linkage across profiles
+    graph-store/            Neo4j CE — relationships between resolved entities
+    [planned] governance/    auth, OPA/ABAC, audit log — needed by every module
   modules/
     trust-safety/         background verification, fraud/risk, platform T&S, cybersec
     [planned] gov-intelligence/   government / law enforcement — the Gotham-alternative surface
@@ -32,3 +32,9 @@ module's policy.
 
 See each service's own README for what's built, what's a verified-working
 stub, and what's evaluated-and-held.
+
+**Status note (entity-resolution + graph-store):** both run and are
+verified end-to-end against each other — a real Splink match-probability
+call writing real `Entity`/`Identifier` nodes into a real running Neo4j
+instance, confirmed via `cypher-shell`. Neither is wired into `trust-safety`
+or `investigate()` yet; that's the natural next step, not done here.
