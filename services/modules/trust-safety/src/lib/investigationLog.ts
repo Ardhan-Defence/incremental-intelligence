@@ -12,6 +12,11 @@ import { JsonStore } from './jsonStore.js';
 export interface LoggedRecord {
   unique_id: string;
   name?: string;
+  /** Correlation fields only — no `investigate()` input kind derives these
+   * today. They exist so a caller that already has them (e.g. a case
+   * file, a form) can pass them through for better entity matching. */
+  father_name?: string;
+  address?: string;
   domain?: string;
   phone?: string;
   email?: string;

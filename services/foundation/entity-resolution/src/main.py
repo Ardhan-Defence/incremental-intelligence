@@ -22,6 +22,8 @@ neo4j_driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD)
 class EntityRecord(BaseModel):
     unique_id: str
     name: str | None = None
+    father_name: str | None = None
+    address: str | None = None
     domain: str | None = None
     phone: str | None = None
     email: str | None = None
@@ -39,17 +41,23 @@ async def health():
 
 def build_linker(records: list[dict[str, Any]]) -> Linker:
     """
-    Splink settings for this service's record shape: name, domain, phone,
-    email. Blocking on domain/phone/email first (two records only get
-    compared if they share at least one of these — necessary for
-    performance at real scale, though at this service's current size it
-    mostly keeps the demo from comparing everything to everything).
+    Splink settings for this service's record shape: name, father_name,
+    address, domain, phone, email. father_name reuses NameComparison (it's
+    a person name, same fuzzy-matching needs as `name`); address uses a
+    Levenshtein comparison rather than ExactMatch since free-text addresses
+    rarely match character-for-character even when they're the same place
+    (abbreviations, punctuation, ordering) — this is NOT geocoding or
+    address normalization, just edit-distance tolerance on the raw string.
+    Blocking on domain/phone/email/father_name/address first (two records
+    only get compared if they share at least one of these).
     """
     df = pd.DataFrame(records)
     settings = SettingsCreator(
         link_type="dedupe_only",
         comparisons=[
             cl.NameComparison("name"),
+            cl.NameComparison("father_name"),
+            cl.LevenshteinAtThresholds("address", 3),
             cl.ExactMatch("domain"),
             cl.ExactMatch("phone"),
             cl.EmailComparison("email"),
@@ -58,6 +66,7 @@ def build_linker(records: list[dict[str, Any]]) -> Linker:
             block_on("domain"),
             block_on("phone"),
             block_on("email"),
+            block_on("father_name"),
         ],
     )
     db_api = DuckDBAPI()
@@ -117,7 +126,7 @@ async def resolve(req: ResolveRequest):
     except Exception as e:
         print(f"[entity-resolution] u-training skipped: {e}")
 
-    for key in ("domain", "phone", "email"):
+    for key in ("domain", "phone", "email", "father_name"):
         try:
             linker.training.estimate_parameters_using_expectation_maximisation(block_on(key))
         except Exception as e:
@@ -169,17 +178,20 @@ async def resolve(req: ResolveRequest):
 def deterministic_match_fallback(records: list[dict[str, Any]]) -> pd.DataFrame:
     """
     Splink's statistical model with no usable fallback: any two records
-    sharing an exact, non-null domain/phone/email value are a match
-    (probability 1.0); nothing else is. No fuzzy name matching here — that
-    needs the comparison model this function exists because Splink
-    couldn't build.
+    sharing an exact, non-null domain/phone/email/address value are a match
+    (probability 1.0); nothing else is. `father_name` is deliberately
+    excluded from this list — a shared father's name alone is a weak
+    identity signal (common names repeat across unrelated people) and
+    shouldn't stand in as sole proof of a match the way an exact phone or
+    email does. No fuzzy name matching here either — that needs the
+    comparison model this function exists because Splink couldn't build.
     """
     rows = []
     for i, left in enumerate(records):
         for right in records[i + 1:]:
             shared = any(
                 left.get(field) and left.get(field) == right.get(field)
-                for field in ("domain", "phone", "email")
+                for field in ("domain", "phone", "email", "address")
             )
             if shared:
                 rows.append({"unique_id_l": left["unique_id"], "unique_id_r": right["unique_id"], "match_probability": 1.0})
@@ -240,7 +252,7 @@ def write_matches_to_graph(records: list[dict[str, Any]], matches: list[dict[str
                 "MERGE (e:Entity {id: $entity_id})",
                 entity_id=entity_id,
             )
-            for field in ("domain", "phone", "email"):
+            for field in ("domain", "phone", "email", "father_name", "address"):
                 value = record.get(field)
                 if not value:
                     continue

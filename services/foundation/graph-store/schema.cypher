@@ -1,8 +1,10 @@
 // Minimal entity-relationship schema. Two node types for a first slice:
 //   (:Entity)       — a resolved real-world identity (output of entity-resolution)
-//   (:Identifier)   — one raw identifier seen in the data (a domain, phone,
-//                     email, IP, or social handle) — what profile synthesis
-//                     and the watchlist already work with today
+//   (:Identifier)   — one raw identifier seen in the data: domain, phone,
+//                     email, father_name, or address (person-name/location
+//                     fields added as correlation inputs only — nothing
+//                     currently looks these up from an external source,
+//                     they're passed in by whatever already has them)
 // (:Entity)-[:HAS_IDENTIFIER]->(:Identifier)
 // Two Identifiers that Splink scores as a likely match get linked to the
 // same Entity node — that's the entire point of this layer: turning

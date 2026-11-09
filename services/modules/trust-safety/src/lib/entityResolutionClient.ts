@@ -5,6 +5,8 @@ export const ENTITY_RESOLUTION_URL = process.env.ENTITY_RESOLUTION_URL || 'http:
 export interface EntityRecord {
   unique_id: string;
   name?: string;
+  father_name?: string;
+  address?: string;
   domain?: string;
   phone?: string;
   email?: string;
@@ -38,6 +40,6 @@ export async function resolveRecords(records: EntityRecord[], writeToGraph: bool
   }
 }
 
-export async function lookupEntity(value: string, type: 'domain' | 'phone' | 'email' | 'name'): Promise<EntityLookupResult | null> {
+export async function lookupEntity(value: string, type: 'domain' | 'phone' | 'email' | 'name' | 'father_name' | 'address'): Promise<EntityLookupResult | null> {
   return fetchJson<EntityLookupResult>(`${ENTITY_RESOLUTION_URL}/v1/entity/lookup?value=${encodeURIComponent(value)}&type=${type}`, { timeoutMs: 10_000 });
 }

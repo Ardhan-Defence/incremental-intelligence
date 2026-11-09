@@ -3,9 +3,15 @@
 Separate Python/FastAPI service wrapping Splink (MIT, UK Ministry of
 Justice, actively maintained — the recommended pick from the correlation
 tool review over Zingg, which needs Spark infra this scale doesn't
-justify). Takes a batch of records (name/domain/phone/email) and returns
-probabilistic match pairs — "these two records likely describe the same
-real-world entity" — optionally writing the result into `../graph-store`.
+justify). Takes a batch of records (name/father_name/address/domain/phone/
+email) and returns probabilistic match pairs — "these two records likely
+describe the same real-world entity" — optionally writing the result into
+`../graph-store`.
+
+`father_name` and `address` are correlation fields only — nothing in this
+system looks them up from an external source. A caller that already has
+them (a case file, a form) passes them in for better matching; there is no
+`investigate()` input kind that derives them on its own.
 
 Every class name and API call here (`DuckDBAPI`, `Linker`, `SettingsCreator`,
 `splink.comparison_library`, `block_on`) was confirmed against the actually
@@ -25,8 +31,8 @@ NEO4J_PASSWORD=<your-password> .venv/bin/uvicorn src.main:app --host 0.0.0.0 --p
 service works standalone (match-probability only, no write) without it.
 
 - `GET /health`
-- `POST /v1/resolve` — body: `{"records": [{"unique_id": "1", "name": "...", "domain": "...", "phone": "...", "email": "..."}, ...], "write_to_graph": false}`
-- `GET /v1/entity/lookup?value=<x>&type=<domain|phone|email>` — returns the resolved Entity owning that identifier and every other identifier merged onto it, read live from the graph.
+- `POST /v1/resolve` — body: `{"records": [{"unique_id": "1", "name": "...", "father_name": "...", "address": "...", "domain": "...", "phone": "...", "email": "..."}, ...], "write_to_graph": false}`
+- `GET /v1/entity/lookup?value=<x>&type=<domain|phone|email|name|father_name|address>` — returns the resolved Entity owning that identifier and every other identifier merged onto it, read live from the graph.
 
 ## How it works
 
@@ -48,7 +54,7 @@ production scoring model. Revisit once there's enough real data volume to
 train against properly.
 
 **Graph write (`write_matches_to_graph`):** each record's `domain`/`phone`/
-`email` fields become `(:Identifier)` nodes; every matched pair gets merged
+`email`/`father_name`/`address` fields become `(:Identifier)` nodes; every matched pair gets merged
 onto the same `(:Entity)` node via `HAS_IDENTIFIER` edges (schema in
 `../graph-store/schema.cypher`). Entity IDs are deterministic from the
 lower of the two matched `unique_id`s, so re-running `/v1/resolve` against
@@ -89,6 +95,16 @@ them.
     sharing a non-null domain/phone/email score 1.0, nothing else does.
     Verified this fallback actually fires and resolves correctly for the
     phone-only pair that broke the first fix.
+- `father_name`/`address` correlation fields, verified live end-to-end:
+  two records with identical `name`/`father_name`/exact-identical `address`
+  correctly matched at probability 1.0 and merged onto one `Entity`; a
+  second pair with identical `name`/`father_name` but a *non-identical*
+  address string ("12 MG Road, Bengaluru" vs. "12, MG Road, Bangalore" —
+  same place, different punctuation/spelling) correctly stayed unmerged,
+  confirming `deterministic_match_fallback` really is exact-string-only on
+  `address` and doesn't silently fuzzy-match it. Both outcomes confirmed
+  directly via `cypher-shell`, and `/v1/entity/lookup?type=father_name` and
+  `?type=address` both resolved correctly against the written graph.
 
 ## Known limitations
 
