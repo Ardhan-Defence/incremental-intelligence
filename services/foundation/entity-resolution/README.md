@@ -26,6 +26,7 @@ service works standalone (match-probability only, no write) without it.
 
 - `GET /health`
 - `POST /v1/resolve` — body: `{"records": [{"unique_id": "1", "name": "...", "domain": "...", "phone": "...", "email": "..."}, ...], "write_to_graph": false}`
+- `GET /v1/entity/lookup?value=<x>&type=<domain|phone|email>` — returns the resolved Entity owning that identifier and every other identifier merged onto it, read live from the graph.
 
 ## How it works
 
@@ -56,24 +57,49 @@ them.
 
 ## Verified working
 
-Ran a real resolve call against three hand-crafted records — two
-plausible matches sharing a domain and phone ("John Smith" /
-"Jon Smith" at the same domain/phone) and one clear non-match — and
-confirmed the match came back above threshold while the non-match
-didn't, then confirmed `write_to_graph: true` produced the expected
-`Entity`/`Identifier` nodes in a running `../graph-store` instance,
-checked directly via `cypher-shell`. See commit history for the exact
-request/response.
+- A real resolve call against three hand-crafted records — two plausible
+  matches sharing a domain and phone ("John Smith" / "Jon Smith" at the
+  same domain/phone) and one clear non-match — confirmed the match came
+  back above threshold while the non-match didn't, and `write_to_graph:
+  true` produced the expected `Entity`/`Identifier` nodes, checked
+  directly via `cypher-shell`.
+- Now wired into `../../modules/trust-safety`'s `investigate()` — see that
+  module's README for the real end-to-end run (two differently-formatted
+  phone numbers correlating to the same entity) and the two bugs that
+  surfaced and got fixed doing it, one of them in this service:
+  **`/v1/entity/lookup` returning "not found" for any entity with only one
+  identifier** — the Cypher pattern required a *second*, distinct
+  identifier node to exist (`(e)-[:HAS_IDENTIFIER]->(other:Identifier)` as
+  a hard `MATCH`), so a solo entity never matched the whole pattern. Fixed
+  by making that part an `OPTIONAL MATCH`.
+- Two more robustness bugs, found while wiring this up for real with sparse
+  data (not every investigated target has a domain, phone, *and* name —
+  most have exactly one):
+  - A batch with only `phone` populated (no `domain`/`email` on any record)
+    made Splink raise outright during EM training on the `domain` blocking
+    key — `"Training rule ... resulted in no record pairs"`. Fixed by
+    wrapping each training step (`estimate_probability_two_random_records_match`,
+    each per-field EM pass) individually, so one sparse field doesn't abort
+    training on the others.
+  - Even past that, `predict()` itself could still raise a bare `"math
+    domain error"` when every comparison column besides the matched one was
+    null on both records — Splink's weight computation has nothing to
+    compute from. Added a deterministic exact-match fallback
+    (`deterministic_match_fallback`) for exactly this case: any two records
+    sharing a non-null domain/phone/email score 1.0, nothing else does.
+    Verified this fallback actually fires and resolves correctly for the
+    phone-only pair that broke the first fix.
 
 ## Known limitations
 
 - Dedupe-only (`link_type="dedupe_only"`) — compares records within one
-  batch, not incrementally against an existing graph. A record submitted
-  today isn't automatically compared against yesterday's entities; that's
-  the natural next piece once there's a real pipeline feeding this.
-- No caller in `trust-safety` or anywhere else wires profiles into this yet
-  — it's a working, verified standalone service, not yet an automatic step
-  in the `investigate()` flow.
+  batch, not incrementally against an existing graph. `trust-safety`
+  resends its *entire* logged-target history on every investigation to
+  work around this; fine at current scale, won't scale past a few thousand
+  logged targets without a real incremental-linking rework.
 - Match threshold (`MATCH_PROBABILITY_THRESHOLD`, default 0.5) is a
   reasonable starting guess, not a validated cutoff — tune it against real
   labeled data before trusting it for anything consequential.
+- The deterministic fallback is exact-match only — no fuzzy name matching
+  when it's in effect, since that's precisely the case Splink's statistical
+  model couldn't handle with the data on hand.

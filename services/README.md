@@ -33,8 +33,11 @@ module's policy.
 See each service's own README for what's built, what's a verified-working
 stub, and what's evaluated-and-held.
 
-**Status note (entity-resolution + graph-store):** both run and are
-verified end-to-end against each other — a real Splink match-probability
-call writing real `Entity`/`Identifier` nodes into a real running Neo4j
-instance, confirmed via `cypher-shell`. Neither is wired into `trust-safety`
-or `investigate()` yet; that's the natural next step, not done here.
+**Status note (entity-resolution + graph-store):** both run, verified
+end-to-end against each other, and now wired into `trust-safety`'s
+`investigate()` — a domain/phone/mastodon-profile investigation logs its
+correlatable field, resolves it against every other previously-investigated
+target, writes the result into the graph, and surfaces real linked targets
+in an "Entity correlation" section. Three real bugs surfaced and were fixed
+wiring this up live, not just assumed working from the code — see
+`entity-resolution`'s and `trust-safety`'s own READMEs.

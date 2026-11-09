@@ -4,10 +4,19 @@ import { fetchSource } from '../lib/foundationClient.js';
 import { lookupMastodonAccount } from '../lib/mastodonAccount.js';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import { fetchJson } from '../lib/http.js';
+import { appendRecord, allRecords, type LoggedRecord } from '../lib/investigationLog.js';
+import { resolveRecords, lookupEntity, ENTITY_RESOLUTION_URL } from '../lib/entityResolutionClient.js';
 
 const ENRICHMENT_RUNNERS_URL = process.env.ENRICHMENT_RUNNERS_URL || 'http://localhost:4200';
 
-async function ipProfile(ip: string): Promise<{ sections: ProfileSection[]; gaps: string[] }> {
+interface KindResult {
+  sections: ProfileSection[];
+  gaps: string[];
+  /** Set when this kind produced a field entity-resolution can correlate on. */
+  correlatable?: Partial<LoggedRecord>;
+}
+
+async function ipProfile(ip: string): Promise<KindResult> {
   const [bgp, threat] = await Promise.all([fetchSource('osint-bgp', { query: ip }), fetchSource('threat-intel', { query: ip })]);
   const bgpPayload = bgp.items[0]?.payload as any;
   const threatPayload = threat.items.find((i) => i.type === 'ip-domain-reputation')?.payload as any;
@@ -37,7 +46,7 @@ async function ipProfile(ip: string): Promise<{ sections: ProfileSection[]; gaps
   return { sections, gaps: ['Geolocation is not included — BGP gives network-owner country, not physical location.'] };
 }
 
-async function domainProfile(domain: string): Promise<{ sections: ProfileSection[]; gaps: string[] }> {
+async function domainProfile(domain: string): Promise<KindResult> {
   const [whois, certs, dns, threat] = await Promise.all([
     fetchSource('osint-whois', { domain }),
     fetchSource('osint-certs', { domain }),
@@ -82,10 +91,11 @@ async function domainProfile(domain: string): Promise<{ sections: ProfileSection
       'Network/ASN ownership not included — would need to resolve the domain to an IP first and run the IP profile on it (not automated yet).',
       'No breach-database or dark-web-mention check — would need a service like HaveIBeenPwned configured.',
     ],
+    correlatable: { domain },
   };
 }
 
-async function phoneProfile(phoneInput: string): Promise<{ sections: ProfileSection[]; gaps: string[] }> {
+async function phoneProfile(phoneInput: string): Promise<KindResult> {
   const phone = parsePhoneNumberFromString(phoneInput);
   const sections: ProfileSection[] = [
     {
@@ -107,10 +117,11 @@ async function phoneProfile(phoneInput: string): Promise<{ sections: ProfileSect
       'Carrier name and account/identity linkage are not included — that needs a paid lookup API (e.g. Twilio Lookup, Numverify), not currently configured.',
       'Deliberately not attempting account-enumeration (checking which platforms this number is registered on via auth/reset endpoints) — flagged as an ethical/legal risk in the enrichment-runners review and intentionally excluded.',
     ],
+    correlatable: phone?.isValid() ? { phone: phone.number } : undefined,
   };
 }
 
-async function mastodonProfile(acct: string, instance: string): Promise<{ sections: ProfileSection[]; gaps: string[] }> {
+async function mastodonProfile(acct: string, instance: string): Promise<KindResult> {
   const profile = await lookupMastodonAccount(acct, instance);
   const sections: ProfileSection[] = [
     {
@@ -131,10 +142,11 @@ async function mastodonProfile(acct: string, instance: string): Promise<{ sectio
   return {
     sections,
     gaps: ['Cross-platform account discovery (does this person use other platforms?) needs the Maigret enrichment runner — not yet built.'],
+    correlatable: profile.found && profile.display_name ? { name: profile.display_name } : undefined,
   };
 }
 
-async function telegramProfile(channel: string): Promise<{ sections: ProfileSection[]; gaps: string[] }> {
+async function telegramProfile(channel: string): Promise<KindResult> {
   const result = await fetchSource('social-telegram', { channel });
   const sections: ProfileSection[] = [
     {
@@ -158,7 +170,7 @@ async function telegramProfile(channel: string): Promise<{ sections: ProfileSect
   };
 }
 
-async function usernameProfile(username: string): Promise<{ sections: ProfileSection[]; gaps: string[] }> {
+async function usernameProfile(username: string): Promise<KindResult> {
   const result = await fetchJson<{ matches: Array<{ site_name: string; url: string; tags?: string[] }>; match_count: number }>(
     `${ENRICHMENT_RUNNERS_URL}/v1/username/${encodeURIComponent(username)}`,
     { timeoutMs: 90_000 }, // Maigret scans take real time, even capped to top-N sites
@@ -187,6 +199,71 @@ async function usernameProfile(username: string): Promise<{ sections: ProfileSec
       'Maigret checks a capped top-N site list, not its full 3,000+ catalog — some accounts may exist on unchecked sites.',
       'Existence detection only — does not confirm the account belongs to the same real-world person as any other profile in this report.',
     ],
+    correlatable: { name: username },
+  };
+}
+
+/**
+ * Logs this target's correlatable field, resolves it against every other
+ * previously-investigated target via entity-resolution, writes the result
+ * to graph-store, then reads back the resulting Entity's full identifier
+ * set — so the profile shows real queried graph state, not just "a match
+ * was found somewhere."
+ */
+async function correlateEntity(uniqueId: string, fields: Partial<LoggedRecord>): Promise<{ section: ProfileSection; gaps: string[] }> {
+  appendRecord({ unique_id: uniqueId, ...fields });
+  const logged = allRecords();
+
+  if (logged.length < 2) {
+    return {
+      section: { title: 'Entity correlation', claims: [] },
+      gaps: ['Only one investigated target logged so far in this trust-safety instance — nothing to correlate against yet.'],
+    };
+  }
+
+  const resolved = await resolveRecords(logged, true);
+  if (!resolved) {
+    return {
+      section: { title: 'Entity correlation', error: `entity-resolution unreachable at ${ENTITY_RESOLUTION_URL}`, claims: [] },
+      gaps: ['entity-resolution service did not respond — is it deployed and is ENTITY_RESOLUTION_URL set correctly?'],
+    };
+  }
+
+  // The actual proof of correlation is "this target was matched against
+  // that one" (resolved.matches), NOT "this entity has an identifier value
+  // different from this target's own" — two investigations sharing the
+  // exact same phone number correctly merge onto one Identifier node with
+  // ONE value, so filtering "identifiers != this value" wrongly finds
+  // nothing even though the correlation is real. Found this live: a second
+  // investigation of the same phone number in a different format showed
+  // "no other investigated target correlated," despite both being written
+  // to the same Entity in the graph.
+  const linkedTargetIds = new Set<string>();
+  for (const m of resolved.matches) {
+    if (m.left_id === uniqueId) linkedTargetIds.add(m.right_id);
+    if (m.right_id === uniqueId) linkedTargetIds.add(m.left_id);
+  }
+
+  const lookupType = fields.domain ? 'domain' : fields.phone ? 'phone' : fields.name ? 'name' : null;
+  const lookupValue = fields.domain ?? fields.phone ?? fields.name ?? null;
+  let identifiers: Array<{ type: string; value: string }> = [];
+  if (lookupType && lookupValue) {
+    const lookup = await lookupEntity(lookupValue, lookupType);
+    identifiers = lookup?.identifiers ?? [];
+  }
+  const distinctIdentifiers = identifiers.filter((i) => i.value !== lookupValue);
+
+  const claims = [
+    ...Array.from(linkedTargetIds).map((id) => ({ label: 'Linked to previously investigated target', value: id, source: 'splink+neo4j', confidence: 'reported' as const })),
+    ...distinctIdentifiers.map((i) => ({ label: `Entity also has ${i.type}`, value: i.value, source: 'splink+neo4j', confidence: 'reported' as const })),
+  ];
+
+  return {
+    section: { title: 'Entity correlation', claims },
+    gaps: [
+      'Entity resolution recomputes match probability across every previously logged target on each call — not incremental, will not scale past a few thousand logged targets without rework (see entity-resolution README).',
+      ...(claims.length === 0 ? ['No other investigated target correlated to this one yet.'] : []),
+    ],
   };
 }
 
@@ -194,7 +271,7 @@ export async function investigate(rawTarget: string): Promise<Profile> {
   const classified = classify(rawTarget);
   const now = new Date().toISOString();
 
-  let result: { sections: ProfileSection[]; gaps: string[] };
+  let result: KindResult;
 
   switch (classified.kind) {
     case 'ip':
@@ -223,11 +300,20 @@ export async function investigate(rawTarget: string): Promise<Profile> {
       result = { sections: [], gaps: [`Unrecognized classification: ${classified.kind}`] };
   }
 
+  const sections = [...result.sections];
+  const gaps = [...result.gaps];
+
+  if (result.correlatable) {
+    const correlation = await correlateEntity(rawTarget, result.correlatable);
+    sections.push(correlation.section);
+    gaps.push(...correlation.gaps);
+  }
+
   return {
     target: rawTarget,
     classifiedAs: classified.kind,
     generatedAt: now,
-    sections: result.sections,
-    gaps: result.gaps,
+    sections,
+    gaps,
   };
 }

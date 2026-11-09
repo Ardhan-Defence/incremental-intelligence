@@ -20,9 +20,12 @@ npm run dev     # tsx watch, http://localhost:4300
 ```
 
 Requires `../../foundation/intel-core` running (default
-`INTEL_CORE_URL=http://localhost:4100`) and, for the `username` profile
-case, `../../foundation/enrichment-runners` (default
-`ENRICHMENT_RUNNERS_URL=http://localhost:4200`).
+`INTEL_CORE_URL=http://localhost:4100`), for the `username` profile case
+`../../foundation/enrichment-runners` (default
+`ENRICHMENT_RUNNERS_URL=http://localhost:4200`), and for entity correlation
+`../../foundation/entity-resolution` (default
+`ENTITY_RESOLUTION_URL=http://localhost:4400`, which itself needs
+`../../foundation/graph-store` running).
 
 - `GET /v1/investigate?target=<anything>` — single-input profile synthesis. See below.
 - `GET /v1/watchlist` / `POST /v1/watchlist` / `DELETE /v1/watchlist/<id>` — manage watchlist entries.
@@ -47,6 +50,29 @@ capability is a visible field in the response, not a silent omission.
 - `mastodon-profile` (a `/@handle` URL) → `src/lib/mastodonAccount.ts` (`/api/v1/accounts/lookup` + recent public statuses — both public, keyless Mastodon endpoints, called directly, not via the foundation — this is profile-specific enrichment, not a generic registered source)
 - `telegram-channel` (a `t.me/...` URL) → foundation's `social-telegram` source
 - `username` (no platform given) → `enrichment-runners`'s Maigret endpoint for cross-platform account discovery; if that service isn't deployed, the profile reports it as unreachable rather than silently returning nothing
+
+**Entity correlation (`src/lib/investigationLog.ts` + `entityResolutionClient.ts`):**
+every `domain`/`email`, `phone`, and `mastodon-profile` investigation also
+logs its correlatable field (domain, normalized phone, or display name),
+resolves it against every other previously-logged target via
+`entity-resolution`, writes the result into `graph-store`, and reads back
+the matched Entity's full identifier set — added as an "Entity correlation"
+section naming exactly which other investigated target(s) this one is
+linked to. `ip`, `telegram-channel`, and `username` kinds don't produce a
+field entity-resolution compares on today, so they don't get this section.
+
+Two real bugs were found and fixed while verifying this live, not just
+assumed working from the code:
+- A phone number investigated twice in different input formats (`+1 415
+  555 1234` vs `14155551234`) initially showed "no other investigated
+  target correlated" despite both being written to the same graph Entity —
+  the correlation check was filtering on "other identifier *values*," which
+  is empty when two records share the exact same value. Fixed to check
+  entity-resolution's actual match list (which target IDs matched which),
+  not just the entity's distinct identifier values.
+- `entity-resolution`'s lookup endpoint returned "not found" for any entity
+  with only one identifier — see that service's README for the underlying
+  Cypher bug.
 
 ## Watchlist / alerting (`src/watchlist/`)
 
