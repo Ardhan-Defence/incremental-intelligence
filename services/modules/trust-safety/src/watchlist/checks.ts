@@ -1,9 +1,5 @@
 import type { CheckResult, WatchlistKind } from './types.js';
-import { certsSource } from '../sources/osint/certs.js';
-import { whoisSource } from '../sources/osint/whois.js';
-import { threatIntelSource } from '../sources/threatIntel.js';
-import { mastodonSource } from '../sources/social/mastodon.js';
-import { telegramSource } from '../sources/social/telegram.js';
+import { fetchSource } from '../lib/foundationClient.js';
 
 /**
  * One check function per watchlist kind. Each returns a "fingerprint": a
@@ -12,11 +8,14 @@ import { telegramSource } from '../sources/social/telegram.js';
  * an alert. This is intentionally dumb (set difference, not semantic
  * understanding of what changed) but it's enough to turn "go look this up
  * again" into "tell me when something's actually different."
+ *
+ * Each check calls the foundation (intel-core) over HTTP via fetchSource —
+ * this module never imports foundation source code directly.
  */
 async function checkDomain(target: string): Promise<CheckResult> {
   const [certResult, whoisResult] = await Promise.all([
-    certsSource.fetch({ domain: target }),
-    whoisSource.fetch({ domain: target }),
+    fetchSource('osint-certs', { domain: target }),
+    fetchSource('osint-whois', { domain: target }),
   ]);
 
   // A failed upstream must not be allowed to masquerade as "zero
@@ -48,7 +47,7 @@ async function checkDomain(target: string): Promise<CheckResult> {
 }
 
 async function checkIp(target: string): Promise<CheckResult> {
-  const result = await threatIntelSource.fetch({ query: target });
+  const result = await fetchSource('threat-intel', { query: target });
   if (result.error) {
     return { fingerprint: [], detail: {}, error: `threat-intel lookup failed: ${result.error}` };
   }
@@ -67,7 +66,7 @@ async function checkIp(target: string): Promise<CheckResult> {
 }
 
 async function checkMastodonHashtag(target: string): Promise<CheckResult> {
-  const result = await mastodonSource.fetch({ hashtag: target });
+  const result = await fetchSource('social-mastodon', { hashtag: target });
   if (result.error) {
     return { fingerprint: [], detail: {}, error: `mastodon lookup failed: ${result.error}` };
   }
@@ -78,7 +77,7 @@ async function checkMastodonHashtag(target: string): Promise<CheckResult> {
 }
 
 async function checkTelegramChannel(target: string): Promise<CheckResult> {
-  const result = await telegramSource.fetch({ channel: target });
+  const result = await fetchSource('social-telegram', { channel: target });
   if (result.error) {
     return { fingerprint: [], detail: {}, error: `telegram lookup failed: ${result.error}` };
   }

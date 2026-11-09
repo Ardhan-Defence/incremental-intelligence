@@ -3,7 +3,7 @@ import { JsonStore } from '../lib/jsonStore.js';
 import { CHECKS, DEFAULT_INTERVAL_MS } from './checks.js';
 import type { Alert, WatchlistEntry, WatchlistKind } from './types.js';
 
-const DATA_DIR = process.env.INTEL_CORE_DATA_DIR || new URL('../../data', import.meta.url).pathname;
+const DATA_DIR = process.env.TRUST_SAFETY_DATA_DIR || new URL('../../data', import.meta.url).pathname;
 
 const watchlistStore = new JsonStore<WatchlistEntry>(`${DATA_DIR}/watchlist.json`);
 const alertStore = new JsonStore<Alert>(`${DATA_DIR}/alerts.json`);

@@ -1,19 +1,14 @@
 import { classify } from './classify.js';
 import type { Profile, ProfileSection } from './types.js';
-import { whoisSource } from '../sources/osint/whois.js';
-import { certsSource } from '../sources/osint/certs.js';
-import { dnsSource } from '../sources/osint/dns.js';
-import { bgpSource } from '../sources/osint/bgp.js';
-import { threatIntelSource } from '../sources/threatIntel.js';
-import { telegramSource } from '../sources/social/telegram.js';
-import { lookupMastodonAccount } from '../sources/social/mastodon.js';
+import { fetchSource } from '../lib/foundationClient.js';
+import { lookupMastodonAccount } from '../lib/mastodonAccount.js';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import { fetchJson } from '../lib/http.js';
 
 const ENRICHMENT_RUNNERS_URL = process.env.ENRICHMENT_RUNNERS_URL || 'http://localhost:4200';
 
 async function ipProfile(ip: string): Promise<{ sections: ProfileSection[]; gaps: string[] }> {
-  const [bgp, threat] = await Promise.all([bgpSource.fetch({ query: ip }), threatIntelSource.fetch({ query: ip })]);
+  const [bgp, threat] = await Promise.all([fetchSource('osint-bgp', { query: ip }), fetchSource('threat-intel', { query: ip })]);
   const bgpPayload = bgp.items[0]?.payload as any;
   const threatPayload = threat.items.find((i) => i.type === 'ip-domain-reputation')?.payload as any;
 
@@ -44,10 +39,10 @@ async function ipProfile(ip: string): Promise<{ sections: ProfileSection[]; gaps
 
 async function domainProfile(domain: string): Promise<{ sections: ProfileSection[]; gaps: string[] }> {
   const [whois, certs, dns, threat] = await Promise.all([
-    whoisSource.fetch({ domain }),
-    certsSource.fetch({ domain }),
-    dnsSource.fetch({ domain }),
-    threatIntelSource.fetch({ query: domain }),
+    fetchSource('osint-whois', { domain }),
+    fetchSource('osint-certs', { domain }),
+    fetchSource('osint-dns', { domain }),
+    fetchSource('threat-intel', { query: domain }),
   ]);
   const whoisPayload = whois.items[0]?.payload as any;
   const certsPayload = certs.items[0]?.payload as any;
@@ -140,7 +135,7 @@ async function mastodonProfile(acct: string, instance: string): Promise<{ sectio
 }
 
 async function telegramProfile(channel: string): Promise<{ sections: ProfileSection[]; gaps: string[] }> {
-  const result = await telegramSource.fetch({ channel });
+  const result = await fetchSource('social-telegram', { channel });
   const sections: ProfileSection[] = [
     {
       title: 'Telegram channel activity',
@@ -157,7 +152,7 @@ async function telegramProfile(channel: string): Promise<{ sections: ProfileSect
   return {
     sections,
     gaps: [
-      'Legal basis for this source is unverified (see social-telegram source note) — scraped from the unofficial public preview, not an official API.',
+      'Legal basis for this source is unverified (see social-telegram source note in the foundation) — scraped from the unofficial public preview, not an official API.',
       'Channel owner identity is not resolvable from the public preview alone.',
     ],
   };

@@ -1,8 +1,8 @@
 {
-  "name": "@osiris/intel-core",
+  "name": "@osiris/trust-safety",
   "version": "0.1.0",
   "private": true,
-  "description": "Normalized multi-source intelligence aggregation service, extracted from the OSIRIS dashboard's API routes.",
+  "description": "Trust & Safety module — profile synthesis and watchlist/alerting, built on the intel-core foundation over HTTP. Background verification, fraud/risk, platform T&S, cybersec.",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
