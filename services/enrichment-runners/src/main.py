@@ -2,6 +2,8 @@ import asyncio
 import json
 import os
 import re
+import shutil
+import sys
 import tempfile
 from datetime import datetime, timezone
 
@@ -12,6 +14,33 @@ app = FastAPI(title="enrichment-runners")
 MAIGRET_TOP_SITES = int(os.environ.get("MAIGRET_TOP_SITES", "500"))
 MAIGRET_TIMEOUT_S = int(os.environ.get("MAIGRET_TIMEOUT_S", "60"))
 USERNAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+
+def _resolve_maigret_binary() -> str:
+    """
+    `maigret` is a console-script installed into whichever environment ran
+    `pip install`. A bare "maigret" subprocess call resolves against the
+    *calling process's* $PATH — which, if this service was started via an
+    absolute interpreter path (e.g. `.venv/bin/uvicorn ...`) without
+    activating that venv, does NOT include the venv's bin/ dir, even though
+    pip installed maigret right there. Found this the hard way: the service
+    started fine, /health worked, and every username check 500'd with
+    FileNotFoundError.
+    Fix: check $PATH first (covers an activated venv or a normal install),
+    then fall back to the same bin/ directory as the running Python
+    interpreter (covers an unactivated venv — the common case for anything
+    started by a process manager rather than a human's shell).
+    """
+    found = shutil.which("maigret")
+    if found:
+        return found
+    candidate = os.path.join(os.path.dirname(sys.executable), "maigret")
+    if os.path.exists(candidate):
+        return candidate
+    raise RuntimeError("maigret executable not found on PATH or next to the running interpreter")
+
+
+MAIGRET_BIN = _resolve_maigret_binary()
 
 
 @app.get("/health")
@@ -31,7 +60,7 @@ async def check_username(username: str):
         # mode), so we point --folderoutput at a scratch dir and read the
         # file back rather than parsing stdout.
         cmd = [
-            "maigret",
+            MAIGRET_BIN,
             username,
             "--json", "ndjson",
             "--folderoutput", tmp_dir,
