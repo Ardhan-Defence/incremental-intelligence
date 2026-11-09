@@ -25,8 +25,16 @@ export interface Alert {
 }
 
 /** What a per-kind check function returns: a fresh fingerprint plus enough
- * detail to explain an alert without re-querying the source. */
+ * detail to explain an alert without re-querying the source.
+ *
+ * `error` matters more than it looks: when set, the engine must NOT persist
+ * `fingerprint` as the new baseline. A transient upstream failure (crt.sh,
+ * OTX, etc. — all observed to be flaky in practice) must never be allowed to
+ * overwrite a real fingerprint with an empty one, or the next successful
+ * check sees everything as "new" and fires a false alert for the entire
+ * watched state. */
 export interface CheckResult {
   fingerprint: string[];
   detail: Record<string, unknown>;
+  error?: string;
 }

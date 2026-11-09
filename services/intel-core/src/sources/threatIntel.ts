@@ -2,7 +2,7 @@ import type { IntelItem, SourceDefinition, SourceResult } from '../types.js';
 import { fetchJson, fetchText } from '../lib/http.js';
 import { isRateLimited, getClientIp } from '../lib/ssrf-guard.js';
 
-interface CvePayload {
+interface KevEntryPayload {
   name: string;
   vendor: string;
   product: string;
@@ -32,15 +32,18 @@ interface IpReputationPayload {
  * product surfacing this needs its own relevance filtering layer on top —
  * none exists yet.
  */
-async function fetchThreatIntel(params: Record<string, string> = {}, req?: Request): Promise<SourceResult<CvePayload | PulsePayload | IpReputationPayload>> {
+async function fetchThreatIntel(params: Record<string, string> = {}, req?: Request): Promise<SourceResult<KevEntryPayload | PulsePayload | IpReputationPayload>> {
   const now = new Date().toISOString();
-  const items: IntelItem<CvePayload | PulsePayload | IpReputationPayload>[] = [];
+  const items: IntelItem<KevEntryPayload | PulsePayload | IpReputationPayload>[] = [];
 
-  if (req) {
-    const clientIp = getClientIp(req);
-    if (isRateLimited(clientIp, 20, 60_000)) {
-      return { source: 'cisa+otx', fetchedAt: now, items: [], error: 'Rate limit exceeded' };
-    }
+  // Every internal caller (profile synthesis, watchlist checks) invokes this
+  // without a Request — rate-limit those too, under a shared key, rather
+  // than silently skipping the limit whenever one isn't available. This is
+  // coarser than per-client limiting but still protects OTX/Tor's upstream
+  // from being hammered by this service's own automation.
+  const rateLimitKey = req ? getClientIp(req) : 'internal-caller';
+  if (isRateLimited(rateLimitKey, 20, 60_000)) {
+    return { source: 'cisa+otx', fetchedAt: now, items: [], error: 'Rate limit exceeded' };
   }
 
   const kev = await fetchJson<any>('https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json', { timeoutMs: 10_000 });

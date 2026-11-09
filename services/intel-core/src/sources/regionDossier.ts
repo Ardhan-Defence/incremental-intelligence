@@ -15,9 +15,20 @@ interface DossierPayload {
 const USER_AGENT = 'IntelCore/0.1 (set a real contact before production use)';
 
 async function fetchDossier(params: Record<string, string> = {}): Promise<SourceResult<DossierPayload>> {
-  const lat = parseFloat(params.lat || '0');
-  const lng = parseFloat(params.lng || '0');
   const now = new Date().toISOString();
+
+  // Unlike the original OSIRIS route this was ported from, missing/invalid
+  // coordinates are rejected rather than silently defaulting to 0,0 (Null
+  // Island) and returning a dossier for the Gulf of Guinea as if it were a
+  // real answer.
+  if (params.lat === undefined || params.lng === undefined) {
+    return { source: 'region-dossier', fetchedAt: now, items: [], error: 'Missing lat/lng parameters' };
+  }
+  const lat = parseFloat(params.lat);
+  const lng = parseFloat(params.lng);
+  if (Number.isNaN(lat) || Number.isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return { source: 'region-dossier', fetchedAt: now, items: [], error: 'Invalid lat/lng parameters' };
+  }
 
   const geoData = await fetchJson<any>(
     `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=5&addressdetails=1`,

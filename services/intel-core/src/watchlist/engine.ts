@@ -44,6 +44,21 @@ export async function runCheck(entry: WatchlistEntry): Promise<Alert | null> {
   const checkFn = CHECKS[entry.kind];
   const result = await checkFn(entry.target);
 
+  // A failed check must never overwrite a real fingerprint with an empty
+  // one — that would make every real item look "new" on the next successful
+  // check. Reschedule and leave lastFingerprint untouched; the next tick
+  // just retries against the same baseline.
+  if (result.error) {
+    watchlistStore.update(
+      (e) => e.id === entry.id,
+      (e) => {
+        e.lastCheckedAt = new Date().toISOString();
+        e.nextRunAt = Date.now() + e.intervalMs;
+      },
+    );
+    return null;
+  }
+
   const previous = new Set(entry.lastFingerprint);
   const newItems = result.fingerprint.filter((f) => !previous.has(f));
   const isFirstRun = entry.lastFingerprint.length === 0 && !entry.lastCheckedAt;

@@ -19,6 +19,13 @@ async function checkDomain(target: string): Promise<CheckResult> {
     whoisSource.fetch({ domain: target }),
   ]);
 
+  // A failed upstream must not be allowed to masquerade as "zero
+  // subdomains" — that would overwrite a real baseline with an empty one
+  // and false-alert on every subdomain the next time the check succeeds.
+  if (certResult.error) {
+    return { fingerprint: [], detail: {}, error: `certs lookup failed: ${certResult.error}` };
+  }
+
   const subdomains: string[] = (certResult.items[0]?.payload as any)?.subdomains ?? [];
   const whoisPayload = whoisResult.items[0]?.payload as any;
 
@@ -32,12 +39,20 @@ async function checkDomain(target: string): Promise<CheckResult> {
       registration: whoisPayload?.registration,
       expiration: whoisPayload?.expiration,
       http_security_grade: whoisPayload?.http_security_score?.grade,
+      // whois failure is non-fatal: it only affects these detail fields
+      // (left undefined above), not the certs-derived fingerprint, so it
+      // must not block persisting a real fingerprint update.
+      whois_error: whoisResult.error,
     },
   };
 }
 
 async function checkIp(target: string): Promise<CheckResult> {
   const result = await threatIntelSource.fetch({ query: target });
+  if (result.error) {
+    return { fingerprint: [], detail: {}, error: `threat-intel lookup failed: ${result.error}` };
+  }
+
   const payload = result.items.find((i) => i.type === 'ip-domain-reputation')?.payload as any;
 
   const fingerprint: string[] = [];
@@ -53,6 +68,9 @@ async function checkIp(target: string): Promise<CheckResult> {
 
 async function checkMastodonHashtag(target: string): Promise<CheckResult> {
   const result = await mastodonSource.fetch({ hashtag: target });
+  if (result.error) {
+    return { fingerprint: [], detail: {}, error: `mastodon lookup failed: ${result.error}` };
+  }
   return {
     fingerprint: result.items.map((i) => i.id),
     detail: { post_count: result.items.length },
@@ -61,6 +79,9 @@ async function checkMastodonHashtag(target: string): Promise<CheckResult> {
 
 async function checkTelegramChannel(target: string): Promise<CheckResult> {
   const result = await telegramSource.fetch({ channel: target });
+  if (result.error) {
+    return { fingerprint: [], detail: {}, error: `telegram lookup failed: ${result.error}` };
+  }
   return {
     fingerprint: result.items.map((i) => i.id),
     detail: { message_count: result.items.length },
