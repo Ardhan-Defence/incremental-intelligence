@@ -28,9 +28,32 @@ Per the extraction review, only two of the four tiers were ported here:
   propagation, flight classification, the SSRF guard) were kept faithful
   rather than rewritten.
 - **`rework`** — `news` (merges the original `news`/`gdelt`/`live-news`
-  routes) and `threat-intel` (merges `cyber-threats`/`osint/threats`). Both
-  are functional today but carry a named, unresolved gap — see each file's
-  top-of-file comment and the `reworkNote` field returned by `/v1/sources`.
+  routes), `threat-intel` (merges `cyber-threats`/`osint/threats`), and
+  `mosdac` (stub only — see below). Each carries a named, unresolved gap —
+  see the file's top-of-file comment and the `reworkNote` field returned by
+  `/v1/sources`.
+
+## Added after the diversification review
+
+- **`conflict-events`** (`src/sources/ucdp.ts`) — Uppsala Conflict Data
+  Program's Georeferenced Event Dataset. Global, not Ukraine-specific like
+  the dropped `frontlines`/DeepState source. Real, working integration
+  against UCDP's documented REST API — but it needs an access token: request
+  one from the UCDP API maintainer (describe your use case) at
+  https://ucdp.uu.se/apidocs/, then set `UCDP_ACCESS_TOKEN`. Without it, the
+  source returns a clear error rather than failing silently. CC BY 4.0,
+  5,000 requests/day.
+- **`mosdac`** (`src/sources/mosdac.ts`) — **stub, not a working
+  integration.** ISRO's MOSDAC was the requested India-fidelity source
+  (INSAT, Oceansat-2, SCATSAT-1, Megha-Tropiques, SARAL), but unlike every
+  other source here it has no documented public HTTP/REST API — only a
+  desktop tool (`mdapi.py`) that authenticates with MOSDAC account
+  username/password and runs locally. Wiring this up for real needs an
+  architecture decision (reverse-engineer `mdapi.py`'s HTTP calls, run it as
+  a scheduled subprocess writing to a shared location, or treat MOSDAC as an
+  offline batch job outside this service's request/response model) — see
+  the file's top comment for the three options weighed. This module exists
+  so the gap is visible in `/v1/sources` rather than silently absent.
 
 **Deliberately not ported** (per the fork review — see conversation history,
 not reproduced here): the CCTV aggregator (scraped border-camera sources of

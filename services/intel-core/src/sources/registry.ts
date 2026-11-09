@@ -15,6 +15,8 @@ import { bgpSource } from './osint/bgp.js';
 import { cveSource } from './osint/cve.js';
 import { newsSource } from './news.js';
 import { threatIntelSource } from './threatIntel.js';
+import { ucdpSource } from './ucdp.js';
+import { mosdacSource } from './mosdac.js';
 
 /**
  * Every extracted source, keyed by name. `tier` + `reworkNote` carry forward
@@ -38,6 +40,8 @@ export const SOURCES: Record<string, SourceDefinition> = {
   'osint-cve': cveSource,
   news: newsSource,
   'threat-intel': threatIntelSource,
+  'conflict-events': ucdpSource,
+  mosdac: mosdacSource,
 };
 
 export function listSources(): Array<{ name: string; tier: string; reworkNote?: string }> {
