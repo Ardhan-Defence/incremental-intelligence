@@ -1,0 +1,331 @@
+<title>Intel Platform Architecture</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* layout: vertical pipeline — TG at top, built core in the middle,
+     planned layer below a dashed boundary, held-infra note at the foot */
+  :root {
+    --bg: #f7f5f0;
+    --panel: #ffffff;
+    --ink: #1c1a17;
+    --muted: #6b6558;
+    --line: #d8d2c4;
+    --built: #1e5f4a;
+    --built-fill: #e6efe9;
+    --planned: #8a8373;
+    --planned-fill: #f1efe8;
+    --accent: #b5542a;
+    --font-display: 'IBM Plex Sans', system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #171613;
+      --panel: #211f1b;
+      --ink: #ece7dc;
+      --muted: #a39b89;
+      --line: #3a362c;
+      --built: #5fbf9a;
+      --built-fill: #1c2e27;
+      --planned: #9a917d;
+      --planned-fill: #26241e;
+      --accent: #e08a5e;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #171613;
+    --panel: #211f1b;
+    --ink: #ece7dc;
+    --muted: #a39b89;
+    --line: #3a362c;
+    --built: #5fbf9a;
+    --built-fill: #1c2e27;
+    --planned: #9a917d;
+    --planned-fill: #26241e;
+    --accent: #e08a5e;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-display);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 32px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 1.6rem;
+    margin: 0 0 4px;
+    text-wrap: balance;
+    letter-spacing: -0.01em;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.95rem;
+    margin: 0 0 28px;
+    max-width: 65ch;
+  }
+  figure { margin: 0; }
+  svg { max-width: 100%; height: auto; display: block; }
+  figcaption {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-top: 10px;
+    max-width: 70ch;
+  }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    margin: 18px 0 36px;
+    font-size: 0.82rem;
+    font-family: var(--font-mono);
+    color: var(--muted);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .swatch { width: 22px; height: 12px; border-radius: 2px; flex: none; }
+  .swatch.built { background: var(--built-fill); border: 1.5px solid var(--built); }
+  .swatch.planned { background: var(--planned-fill); border: 1.5px dashed var(--planned); }
+
+  section.tg {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--accent);
+    border-radius: 4px;
+    padding: 18px 20px;
+    margin: 36px 0;
+  }
+  section.tg h2 {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    margin: 0 0 10px;
+  }
+  section.tg p { margin: 0 0 10px; line-height: 1.55; font-size: 0.95rem; }
+  section.tg p:last-child { margin-bottom: 0; }
+  section.tg strong { color: var(--ink); }
+
+  .notscope {
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    color: var(--muted);
+    border-top: 1px dashed var(--line);
+    margin-top: 14px;
+    padding-top: 12px;
+  }
+</style>
+
+<h1>Intel Platform — System Architecture</h1>
+<p class="subtitle">
+  One input, one credible profile — built so far, and what's planned on top
+  of it. Solid boxes are live and verified; dashed boxes are evaluated,
+  scoped, and not yet built.
+</p>
+
+<div class="legend">
+  <span><span class="swatch built"></span> built &amp; verified live</span>
+  <span><span class="swatch planned"></span> planned, not built</span>
+</div>
+
+<figure>
+<svg viewBox="0 0 1280 1540" role="img" aria-label="Architecture diagram: a Target Group submits a target through a single investigate endpoint or a recurring watchlist scheduler; a classifier routes it to the intel-core sources registry, the Maigret enrichment-runners service, or inline phone parsing; results merge into one Profile with confidence-tagged claims and explicit gaps, or into watchlist alerts. Below a dashed boundary, planned work adds entity resolution, a graph store, media forensics, and visualization or external analyst tools, with Kafka-style ingestion explicitly held for later.">
+  <defs>
+    <marker id="arrow-built" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--built)"/>
+    </marker>
+    <marker id="arrow-planned" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--planned)"/>
+    </marker>
+  </defs>
+
+  <!-- ============ TG actor ============ -->
+  <rect x="380" y="60" width="520" height="80" rx="4" fill="var(--panel)" stroke="var(--accent)" stroke-width="2"/>
+  <text x="640" y="88" text-anchor="middle" font-family="var(--font-mono)" font-size="10" letter-spacing="1.5" fill="var(--accent)">TARGET GROUP</text>
+  <text x="640" y="110" text-anchor="middle" font-size="13" fill="var(--ink)">Security / fraud / trust &amp; safety analyst</text>
+  <text x="640" y="128" text-anchor="middle" font-size="11" fill="var(--muted)">internal investigative tool — not consumer-facing</text>
+
+  <!-- arrows TG -> entries -->
+  <line x1="560" y1="140" x2="370" y2="196" stroke="var(--built)" stroke-width="1.6" marker-end="url(#arrow-built)"/>
+  <text x="430" y="172" font-size="10" fill="var(--muted)">submits target</text>
+  <line x1="720" y1="140" x2="910" y2="196" stroke="var(--built)" stroke-width="1.6" marker-end="url(#arrow-built)"/>
+  <text x="790" y="172" font-size="10" fill="var(--muted)">adds to watchlist</text>
+
+  <!-- ============ Entry points ============ -->
+  <rect x="100" y="200" width="500" height="80" rx="4" fill="var(--built-fill)" stroke="var(--built)" stroke-width="1.6"/>
+  <text x="350" y="232" text-anchor="middle" font-family="var(--font-mono)" font-size="13" fill="var(--ink)">GET /v1/investigate?target=&lt;anything&gt;</text>
+  <text x="350" y="252" text-anchor="middle" font-size="11" fill="var(--muted)">one-shot lookup, on demand</text>
+
+  <rect x="680" y="200" width="500" height="80" rx="4" fill="var(--built-fill)" stroke="var(--built)" stroke-width="1.6"/>
+  <text x="930" y="232" text-anchor="middle" font-size="13" fill="var(--ink)">Watchlist scheduler</text>
+  <text x="930" y="252" text-anchor="middle" font-size="11" fill="var(--muted)">30s tick · re-checks saved targets, diffs fingerprint</text>
+
+  <!-- investigate -> classifier -->
+  <line x1="350" y1="280" x2="560" y2="338" stroke="var(--built)" stroke-width="1.6" marker-end="url(#arrow-built)"/>
+
+  <!-- watchlist -> sources registry (bypasses classifier) -->
+  <polyline points="930,280 930,440 270,440 270,478" fill="none" stroke="var(--built)" stroke-width="1.6" marker-end="url(#arrow-built)"/>
+  <text x="600" y="432" font-size="10" fill="var(--muted)">re-runs the same domain / ip / social checks</text>
+
+  <!-- watchlist -> watchlist store -->
+  <polyline points="990,280 990,660 1040,660 1040,698" fill="none" stroke="var(--built)" stroke-width="1.6" marker-end="url(#arrow-built)"/>
+
+  <!-- ============ Classifier ============ -->
+  <rect x="440" y="340" width="400" height="80" rx="4" fill="var(--built-fill)" stroke="var(--built)" stroke-width="1.6"/>
+  <text x="640" y="368" text-anchor="middle" font-family="var(--font-mono)" font-size="12" fill="var(--ink)">classify(target)</text>
+  <text x="640" y="388" text-anchor="middle" font-size="10.5" fill="var(--muted)">ip · domain · email · phone · mastodon-url · telegram-url · username</text>
+
+  <!-- classifier fan-out -->
+  <line x1="560" y1="420" x2="320" y2="476" stroke="var(--built)" stroke-width="1.6" marker-end="url(#arrow-built)"/>
+  <text x="330" y="458" font-size="10" fill="var(--muted)">ip · domain · email</text>
+  <text x="330" y="470" font-size="10" fill="var(--muted)">mastodon · telegram</text>
+
+  <line x1="680" y1="420" x2="700" y2="476" stroke="var(--built)" stroke-width="1.6" marker-end="url(#arrow-built)"/>
+  <text x="710" y="458" font-size="10" fill="var(--muted)">username</text>
+  <text x="710" y="470" font-size="10" fill="var(--muted)">(HTTP)</text>
+
+  <line x1="780" y1="420" x2="1040" y2="476" stroke="var(--built)" stroke-width="1.6" marker-end="url(#arrow-built)"/>
+  <text x="920" y="458" font-size="10" fill="var(--muted)">phone</text>
+
+  <!-- ============ Built core row ============ -->
+  <rect x="60" y="480" width="420" height="160" rx="4" fill="var(--built-fill)" stroke="var(--built)" stroke-width="1.6"/>
+  <text x="270" y="506" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Sources Registry</text>
+  <text x="270" y="522" text-anchor="middle" font-family="var(--font-mono)" font-size="10" fill="var(--muted)">intel-core · Node/TS</text>
+  <text x="270" y="546" text-anchor="middle" font-size="10.5" fill="var(--ink)">earthquakes · fires · flights · satellites</text>
+  <text x="270" y="562" text-anchor="middle" font-size="10.5" fill="var(--ink)">maritime · UCDP conflict-events · MOSDAC (stub)</text>
+  <text x="270" y="582" text-anchor="middle" font-size="10.5" fill="var(--ink)">osint: dns · whois · certs · bgp · cve</text>
+  <text x="270" y="598" text-anchor="middle" font-size="10.5" fill="var(--ink)">threat-intel · news · mastodon · telegram</text>
+  <text x="270" y="622" text-anchor="middle" font-size="10" fill="var(--muted)">24 sources · GET /v1/&lt;name&gt; · GET /v1/all</text>
+
+  <rect x="520" y="480" width="340" height="160" rx="4" fill="var(--built-fill)" stroke="var(--built)" stroke-width="1.6"/>
+  <text x="690" y="506" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Enrichment Runners</text>
+  <text x="690" y="522" text-anchor="middle" font-family="var(--font-mono)" font-size="10" fill="var(--muted)">Python · FastAPI · separate process</text>
+  <text x="690" y="552" text-anchor="middle" font-size="10.5" fill="var(--ink)">Maigret: username →</text>
+  <text x="690" y="570" text-anchor="middle" font-size="10.5" fill="var(--ink)">top 500 of 3,000+ sites</text>
+  <text x="690" y="596" text-anchor="middle" font-size="10" fill="var(--muted)">isolated so Maigret's license (MIT)</text>
+  <text x="690" y="610" text-anchor="middle" font-size="10" fill="var(--muted)">and Python runtime stay out of intel-core</text>
+
+  <rect x="900" y="480" width="280" height="160" rx="4" fill="var(--built-fill)" stroke="var(--built)" stroke-width="1.6"/>
+  <text x="1040" y="506" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">libphonenumber-js</text>
+  <text x="1040" y="528" text-anchor="middle" font-size="10.5" fill="var(--ink)">inline parse — phone case</text>
+  <text x="1040" y="550" text-anchor="middle" font-size="10.5" fill="var(--ink)">validity · country · line type</text>
+  <text x="1040" y="572" text-anchor="middle" font-size="10.5" fill="var(--ink)">formatted number</text>
+  <text x="1040" y="596" text-anchor="middle" font-size="10" fill="var(--muted)">no network call —</text>
+  <text x="1040" y="610" text-anchor="middle" font-size="10" fill="var(--muted)">carrier/account needs a paid API</text>
+
+  <!-- built core -> synthesis -->
+  <line x1="270" y1="640" x2="520" y2="698" stroke="var(--built)" stroke-width="1.6" marker-end="url(#arrow-built)"/>
+  <text x="330" y="680" font-size="10" fill="var(--muted)">results</text>
+  <line x1="690" y1="640" x2="630" y2="698" stroke="var(--built)" stroke-width="1.6" marker-end="url(#arrow-built)"/>
+  <text x="640" y="680" font-size="10" fill="var(--muted)">matches</text>
+  <line x1="1040" y1="640" x2="780" y2="698" stroke="var(--built)" stroke-width="1.6" marker-end="url(#arrow-built)"/>
+  <text x="840" y="680" font-size="10" fill="var(--muted)">parsed number</text>
+
+  <!-- ============ Profile Synthesis + Watchlist Store ============ -->
+  <rect x="340" y="700" width="500" height="100" rx="4" fill="var(--built-fill)" stroke="var(--built)" stroke-width="1.6"/>
+  <text x="590" y="726" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Profile Synthesis</text>
+  <text x="590" y="742" text-anchor="middle" font-family="var(--font-mono)" font-size="10" fill="var(--muted)">investigate.ts</text>
+  <text x="590" y="764" text-anchor="middle" font-size="10.5" fill="var(--ink)">claims tagged confirmed / reported / unavailable</text>
+  <text x="590" y="782" text-anchor="middle" font-size="10.5" fill="var(--ink)">+ explicit gaps[] naming what's missing</text>
+
+  <rect x="900" y="700" width="280" height="100" rx="4" fill="var(--built-fill)" stroke="var(--built)" stroke-width="1.6"/>
+  <text x="1040" y="726" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Watchlist Store</text>
+  <text x="1040" y="748" text-anchor="middle" font-size="10.5" fill="var(--ink)">JSON file + diff engine</text>
+  <text x="1040" y="770" text-anchor="middle" font-size="10" fill="var(--muted)">flagged: scaffold only,</text>
+  <text x="1040" y="784" text-anchor="middle" font-size="10" fill="var(--muted)">not for multi-replica scale</text>
+
+  <!-- synthesis + store -> output -->
+  <line x1="590" y1="800" x2="590" y2="838" stroke="var(--built)" stroke-width="1.6" marker-end="url(#arrow-built)"/>
+  <line x1="1000" y1="800" x2="820" y2="838" stroke="var(--built)" stroke-width="1.6" marker-end="url(#arrow-built)"/>
+  <text x="900" y="822" font-size="10" fill="var(--muted)">alert on change</text>
+
+  <!-- ============ Output ============ -->
+  <rect x="340" y="840" width="500" height="80" rx="4" fill="var(--panel)" stroke="var(--accent)" stroke-width="2"/>
+  <text x="590" y="872" text-anchor="middle" font-size="13" fill="var(--ink)">Profile JSON (sections + gaps)  ·  Alerts (on change)</text>
+  <text x="590" y="892" text-anchor="middle" font-size="10.5" fill="var(--muted)">→ returned to the analyst who asked</text>
+
+  <!-- ============ Planned boundary ============ -->
+  <rect x="40" y="980" width="1200" height="460" rx="6" fill="none" stroke="var(--planned)" stroke-width="1.4" stroke-dasharray="6 5"/>
+  <text x="60" y="1004" font-family="var(--font-mono)" font-size="10.5" letter-spacing="1.5" fill="var(--planned)">PLANNED — NOT BUILT</text>
+
+  <!-- output -> entity resolution -->
+  <line x1="500" y1="920" x2="340" y2="1036" stroke="var(--planned)" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arrow-planned)"/>
+  <text x="320" y="975" font-size="10" fill="var(--muted)">profiles in</text>
+
+  <!-- watchlist store -> graph store -->
+  <line x1="1000" y1="800" x2="860" y2="1036" stroke="var(--planned)" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arrow-planned)"/>
+  <text x="900" y="950" font-size="10" fill="var(--muted)">replaces</text>
+
+  <rect x="100" y="1040" width="420" height="100" rx="4" fill="var(--planned-fill)" stroke="var(--planned)" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="310" y="1066" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Entity Resolution — Splink</text>
+  <text x="310" y="1086" text-anchor="middle" font-size="10.5" fill="var(--ink)">probabilistic record linkage across profiles</text>
+  <text x="310" y="1104" text-anchor="middle" font-size="10" fill="var(--muted)">likely MIT, UK MoJ — verify LICENSE before use</text>
+  <text x="310" y="1120" text-anchor="middle" font-size="10" fill="var(--muted)">(same real person, no shared key)</text>
+
+  <line x1="520" y1="1090" x2="576" y2="1090" stroke="var(--planned)" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arrow-planned)"/>
+  <text x="525" y="1082" font-size="9.5" fill="var(--muted)">entities + edges</text>
+
+  <rect x="580" y="1040" width="420" height="100" rx="4" fill="var(--planned-fill)" stroke="var(--planned)" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="790" y="1066" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Graph Store</text>
+  <text x="790" y="1082" text-anchor="middle" font-size="10.5" fill="var(--ink)">Apache AGE (Postgres ext.) or Neo4j CE</text>
+  <text x="790" y="1102" text-anchor="middle" font-size="10" fill="var(--muted)">person ↔ phone ↔ domain ↔ account</text>
+  <text x="790" y="1118" text-anchor="middle" font-size="10" fill="var(--muted)">Neo4j CE = GPLv3, fine self-hosted/internal</text>
+
+  <rect x="100" y="1180" width="420" height="100" rx="4" fill="var(--planned-fill)" stroke="var(--planned)" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="310" y="1206" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Media Forensics (new service)</text>
+  <text x="310" y="1226" text-anchor="middle" font-size="10.5" fill="var(--ink)">ExifTool · yt-dlp + FFmpeg · PySceneDetect</text>
+  <text x="310" y="1246" text-anchor="middle" font-size="10" fill="var(--muted)">new input type: image / video URL</text>
+  <text x="310" y="1262" text-anchor="middle" font-size="10" fill="var(--muted)">would join the classifier's fan-out above</text>
+
+  <!-- graph store -> viz / external -->
+  <line x1="740" y1="1140" x2="340" y2="1316" stroke="var(--planned)" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arrow-planned)"/>
+  <text x="440" y="1240" font-size="10" fill="var(--muted)">render</text>
+  <line x1="820" y1="1140" x2="800" y2="1316" stroke="var(--planned)" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arrow-planned)"/>
+  <text x="820" y="1240" font-size="10" fill="var(--muted)">export</text>
+
+  <rect x="100" y="1320" width="420" height="80" rx="4" fill="var(--planned-fill)" stroke="var(--planned)" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="310" y="1348" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">Visualization</text>
+  <text x="310" y="1368" text-anchor="middle" font-size="10.5" fill="var(--ink)">Cytoscape.js (graph) · Kepler.gl (map)</text>
+  <text x="310" y="1386" text-anchor="middle" font-size="10" fill="var(--muted)">the actual TG-facing product surface</text>
+
+  <rect x="580" y="1320" width="420" height="80" rx="4" fill="var(--planned-fill)" stroke="var(--planned)" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="790" y="1348" text-anchor="middle" font-size="13" font-weight="600" fill="var(--ink)">External analyst tools</text>
+  <text x="790" y="1368" text-anchor="middle" font-size="10.5" fill="var(--ink)">Maltego CE · Gephi · QGIS</text>
+  <text x="790" y="1386" text-anchor="middle" font-size="10" fill="var(--muted)">consume exports — never embedded</text>
+
+  <!-- ============ Held note ============ -->
+  <rect x="40" y="1460" width="1200" height="60" rx="4" fill="none" stroke="var(--muted)" stroke-width="1.2" stroke-dasharray="2 4"/>
+  <text x="640" y="1486" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" fill="var(--muted)">HELD, NOT PLANNED YET — Kafka · NiFi · Airflow</text>
+  <text x="640" y="1504" text-anchor="middle" font-size="10" fill="var(--muted)">explicitly deferred until real streaming / multi-tenant volume exists — would solve a scale problem this doesn't have yet</text>
+</svg>
+<figcaption>
+  Every solid box exists in the repo today and was exercised against live
+  upstream data. Every dashed box was evaluated in the correlation-tool
+  review (license, maintenance, mechanism) and scoped, but no code has been
+  written for it.
+</figcaption>
+</figure>
+
+<section class="tg">
+  <h2>Who this is actually for</h2>
+  <p>
+    <strong>Security, fraud, and trust &amp; safety teams</strong> vetting a
+    counterparty, an unfamiliar IP, a suspicious domain, or an unverified
+    social account — the kind of lookup an analyst currently does by hand
+    across four or five separate tools. The deliverable is a credible,
+    sourced profile an analyst acts on, not a headline a general audience
+    scrolls past.
+  </p>
+  <p class="notscope">
+    Not the target: a consumer-facing product, a predictive system, or a
+    passive monitoring tool with push notifications (watchlist alerts exist,
+    but delivery is poll-only — nothing pages anyone yet). Correlation across
+    separate profiles doesn't exist until Entity Resolution is built; until
+    then, two profiles that share a phone number look like two profiles, not
+    one resolved identity.
+  </p>
+</section>
