@@ -39,7 +39,7 @@ on their own.
 - `phone` → `libphonenumber-js` (validity, country, line type, formatting only — no carrier or account linkage; see the gap it reports)
 - `mastodon-profile` (a `/@handle` URL) → new account-lookup helper in `sources/social/mastodon.ts` (`/api/v1/accounts/lookup` + recent public statuses — both public, keyless endpoints)
 - `telegram-channel` (a `t.me/...` URL) → the existing `social-telegram` source
-- `username` (no platform given) → returns an empty profile with a gap explicitly naming the reason: cross-platform account discovery needs the Maigret enrichment runner, not yet built (see "Correlation plan" below)
+- `username` (no platform given) → calls `../enrichment-runners`'s Maigret endpoint (`ENRICHMENT_RUNNERS_URL`, defaults to `http://localhost:4200`) for cross-platform account discovery; if that service isn't deployed, the profile reports it as unreachable rather than silently returning nothing
 
 **A real bug this surfaced and fixed:** `osint-whois`'s RDAP call was
 returning empty registration/expiration data for every domain — rdap.org
@@ -47,22 +47,20 @@ redirects to the registry's own RDAP server (e.g. Verisign's), which was
 returning 403 to Node's default fetch `User-Agent` while accepting curl's.
 Fixed by setting an explicit User-Agent on that request.
 
-## Correlation plan (tools evaluated, not yet built)
+## Correlation tools: built vs. evaluated-and-held
 
-Reviewed six tools as candidates for a cross-platform "enrichment runners"
-service that `investigate()` would call into for the `username` case:
+Six tools were reviewed as candidates for a cross-platform enrichment layer:
 
-- **Maigret** (MIT, actively maintained) — the recommended first build. Checks a username against 3,000+ sites.
-- **Google libphonenumber** — already integrated directly (see above); it's a parsing library, not a recon tool, so it didn't need its own service.
+- **Maigret** (MIT, actively maintained) — **built.** Lives in
+  `../enrichment-runners` (separate Python/FastAPI service, called over
+  HTTP, not imported into this codebase — keeps its dependency tree and the
+  five held-tools' licensing concerns below fully isolated from `intel-core`).
+  Wired into the `username` case of `investigate()`.
+- **Google libphonenumber** — built, integrated directly (see above); it's a parsing library, not a recon tool, so it didn't need its own service.
 - **Maltego CE** — not something to embed; its license forbids commercial use. Better fit: expose `investigate()`'s output *to* Maltego as a custom transform later.
-- **Social-Analyzer** — AGPL-3.0, likely stale — holding on this pending a license decision (AGPL's network-use clause is a real conflict with a commercial product; get this confirmed with counsel before building on it).
+- **Social-Analyzer** — AGPL-3.0, likely stale — holding pending a license decision (AGPL's network-use clause is a real conflict with a commercial product; get this confirmed with counsel before building on it).
 - **PhoneInfoga** — GPL-3.0, and historically fragile against Google's anti-scraping (its own docs note getting blocked/captcha'd) — holding.
 - **Ignorant** — deliberately **not** building this. It works by probing platforms' own password-reset/account-recovery endpoints to infer registration — a materially different (and riskier) mechanism than anything else in this service, not just a licensing question.
-
-None of these six are built yet. `enrichment-runners` would be a separate
-service (Python runtime, isolated license exposure), called by `intel-core`
-over the network the same way it calls any external API — not imported
-directly into this codebase.
 
 ## Scope of this pass
 

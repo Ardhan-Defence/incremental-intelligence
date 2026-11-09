@@ -8,6 +8,9 @@ import { threatIntelSource } from '../sources/threatIntel.js';
 import { telegramSource } from '../sources/social/telegram.js';
 import { lookupMastodonAccount } from '../sources/social/mastodon.js';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
+import { fetchJson } from '../lib/http.js';
+
+const ENRICHMENT_RUNNERS_URL = process.env.ENRICHMENT_RUNNERS_URL || 'http://localhost:4200';
 
 async function ipProfile(ip: string): Promise<{ sections: ProfileSection[]; gaps: string[] }> {
   const [bgp, threat] = await Promise.all([bgpSource.fetch({ query: ip }), threatIntelSource.fetch({ query: ip })]);
@@ -160,6 +163,38 @@ async function telegramProfile(channel: string): Promise<{ sections: ProfileSect
   };
 }
 
+async function usernameProfile(username: string): Promise<{ sections: ProfileSection[]; gaps: string[] }> {
+  const result = await fetchJson<{ matches: Array<{ site_name: string; url: string; tags?: string[] }>; match_count: number }>(
+    `${ENRICHMENT_RUNNERS_URL}/v1/username/${encodeURIComponent(username)}`,
+    { timeoutMs: 90_000 }, // Maigret scans take real time, even capped to top-N sites
+  );
+
+  if (!result) {
+    return {
+      sections: [{ title: 'Cross-platform account discovery', error: `enrichment-runners unreachable at ${ENRICHMENT_RUNNERS_URL}`, claims: [] }],
+      gaps: ['enrichment-runners service did not respond — is it deployed and is ENRICHMENT_RUNNERS_URL set correctly?'],
+    };
+  }
+
+  return {
+    sections: [
+      {
+        title: 'Cross-platform account discovery',
+        claims: result.matches.map((m) => ({
+          label: 'Account found',
+          value: { site: m.site_name, url: m.url, tags: m.tags },
+          source: 'maigret',
+          confidence: 'reported', // existence-detected, not verified by a human
+        })),
+      },
+    ],
+    gaps: [
+      'Maigret checks a capped top-N site list, not its full 3,000+ catalog — some accounts may exist on unchecked sites.',
+      'Existence detection only — does not confirm the account belongs to the same real-world person as any other profile in this report.',
+    ],
+  };
+}
+
 export async function investigate(rawTarget: string): Promise<Profile> {
   const classified = classify(rawTarget);
   const now = new Date().toISOString();
@@ -187,14 +222,10 @@ export async function investigate(rawTarget: string): Promise<Profile> {
       result = await telegramProfile(classified.extra!.channel);
       break;
     case 'username':
+      result = await usernameProfile(classified.normalized);
+      break;
     default:
-      result = {
-        sections: [],
-        gaps: [
-          'Bare username given with no platform — cross-platform account discovery needs the Maigret enrichment runner, which is not yet built.',
-          'In the meantime, a platform-specific link (e.g. a t.me/<channel> or https://<instance>/@<handle> URL) will return real data.',
-        ],
-      };
+      result = { sections: [], gaps: [`Unrecognized classification: ${classified.kind}`] };
   }
 
   return {
