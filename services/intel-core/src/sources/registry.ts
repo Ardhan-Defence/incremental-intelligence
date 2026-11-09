@@ -17,6 +17,8 @@ import { newsSource } from './news.js';
 import { threatIntelSource } from './threatIntel.js';
 import { ucdpSource } from './ucdp.js';
 import { mosdacSource } from './mosdac.js';
+import { mastodonSource } from './social/mastodon.js';
+import { telegramSource } from './social/telegram.js';
 
 /**
  * Every extracted source, keyed by name. `tier` + `reworkNote` carry forward
@@ -42,6 +44,8 @@ export const SOURCES: Record<string, SourceDefinition> = {
   'threat-intel': threatIntelSource,
   'conflict-events': ucdpSource,
   mosdac: mosdacSource,
+  'social-mastodon': mastodonSource,
+  'social-telegram': telegramSource,
 };
 
 export function listSources(): Array<{ name: string; tier: string; reworkNote?: string }> {
