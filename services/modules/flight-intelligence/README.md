@@ -11,6 +11,9 @@ in place before this module existed:
    ADS-B feed (registration, icao24, operator/callsign code) across
    sightings via `entity-resolution`, writing the result into
    `../graph-store`.
+3. **Historical flight playback** — position history for tracked
+   `tail-number` entries, piggybacked on the watchlist's own poll tick, not
+   a separate bulk recorder (see `src/playback/positionLog.ts`).
 
 **Also explicitly out of scope:** RPAS (remotely piloted aircraft)
 trajectory planning/path prediction and payload/sensor telemetry
@@ -56,6 +59,7 @@ INTEL_CORE_URL=http://localhost:4100 ENTITY_RESOLUTION_URL=http://localhost:4400
 - `GET /v1/watchlist` / `POST /v1/watchlist` (`{"kind":"tail-number","target":"VT-ABC"}` or `{"kind":"callsign-pattern","target":"AIC"}`) / `DELETE /v1/watchlist/<id>`
 - `POST /v1/watchlist/<id>/check` — run immediately, bypassing the schedule
 - `GET /v1/alerts` (optional `?since=<ISO timestamp>`)
+- `GET /v1/playback?registration=<tail>[&since=<ISO>][&until=<ISO>]` — recorded position track for a `tail-number` watchlist entry
 
 ## Verified working (live, against real traffic)
 
@@ -79,6 +83,16 @@ INTEL_CORE_URL=http://localhost:4100 ENTITY_RESOLUTION_URL=http://localhost:4400
   `/v1/entity/lookup?type=icao24` correctly returning both registrations
   and both operator codes as linked identifiers on that one Entity.
 
+- Historical playback, confirmed against a real moving aircraft (not a
+  stationary/synthetic test): two position points recorded ~52 seconds
+  apart showed the aircraft had genuinely moved (lat 58.23061→58.1606, lng
+  -139.06237→-138.88971) consistent with its reported heading/speed, with
+  points correctly ordered chronologically. Confirmed the cache-repeat
+  dedup actually fires: a check landing inside `flights`'s 45s cache
+  window produced no duplicate point for the same upstream snapshot
+  timestamp. Confirmed the `since`/`until` filters narrow results
+  correctly, and the missing-`registration` 400 path.
+
 ## Known limitations
 
 - `flights` is a global snapshot across six fixed broad regions (see
@@ -92,3 +106,11 @@ INTEL_CORE_URL=http://localhost:4100 ENTITY_RESOLUTION_URL=http://localhost:4400
   deterministic-fallback match criteria (same reasoning as `father_name` in
   `entity-resolution`): shared by many unrelated aircraft, too weak alone
   to prove two records are the same airframe.
+- Playback only records `tail-number` entries, not `callsign-pattern` ones
+  (a pattern can match many aircraft at once — recording all of them has
+  the same unbounded-growth problem as recording the whole global feed).
+  It also only has history from the moment a tail number was added to the
+  watchlist forward — no backfill of positions from before that, since
+  adsb.lol is a live feed with no historical archive of its own (that's
+  genuinely FlightAware/Flightradar24/Spire territory, not something this
+  foundation source can provide).

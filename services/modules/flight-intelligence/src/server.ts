@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { addWatchlistEntry, listAlerts, listWatchlist, removeWatchlistEntry, runCheck, startScheduler } from './watchlist/engine.js';
 import type { WatchlistKind } from './watchlist/types.js';
 import { correlateAsset } from './assets/correlate.js';
+import { getTrack } from './playback/positionLog.js';
 
 const PORT = Number(process.env.PORT || 4500);
 const VALID_KINDS: WatchlistKind[] = ['tail-number', 'callsign-pattern'];
@@ -82,6 +83,12 @@ const server = createServer(async (req, res) => {
     return sendJson(res, 200, { alerts: listAlerts(params.since) });
   }
 
+  if (url.pathname === '/v1/playback' && req.method === 'GET') {
+    if (!params.registration) return sendJson(res, 400, { error: 'registration query parameter is required' });
+    const track = getTrack(params.registration, params.since, params.until);
+    return sendJson(res, 200, { registration: params.registration.toUpperCase(), point_count: track.length, track });
+  }
+
   return sendJson(res, 404, { error: 'Not found' });
 });
 
@@ -97,4 +104,5 @@ server.listen(PORT, () => {
   console.log(`  DEL  /v1/watchlist/<id>       — remove one`);
   console.log(`  POST /v1/watchlist/<id>/check — run a check immediately, bypassing the schedule`);
   console.log(`  GET  /v1/alerts               — list alerts (optional ?since=<ISO timestamp>)`);
+  console.log(`  GET  /v1/playback?registration=<tail>[&since=][&until=] — recorded position history for a tail-number watchlist entry`);
 });

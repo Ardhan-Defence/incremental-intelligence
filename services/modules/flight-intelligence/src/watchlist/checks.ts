@@ -1,8 +1,12 @@
 import type { CheckResult, WatchlistKind } from './types.js';
-import { fetchSource } from '../lib/foundationClient.js';
+import { fetchSource, type IntelItem } from '../lib/foundationClient.js';
+import { recordPosition } from '../playback/positionLog.js';
 
 interface FlightPayload {
   callsign: string;
+  alt: number;
+  heading: number;
+  speed_knots: number | null;
   registration: string;
   icao24: string;
   airline_code: string;
@@ -22,10 +26,10 @@ interface FlightPayload {
  * callsign-prefix match (an airline or flight-number code), not a true
  * city-pair.
  */
-async function fetchLiveFlights(): Promise<{ items: Array<{ id: string; payload: FlightPayload }>; error?: string }> {
+async function fetchLiveFlights(): Promise<{ items: IntelItem<FlightPayload>[]; error?: string }> {
   const result = await fetchSource<FlightPayload>('flights');
   if (result.error) return { items: [], error: result.error };
-  return { items: result.items.filter((i) => i.type === 'flight') as any };
+  return { items: result.items.filter((i) => i.type === 'flight') };
 }
 
 async function checkTailNumber(target: string): Promise<CheckResult> {
@@ -34,6 +38,22 @@ async function checkTailNumber(target: string): Promise<CheckResult> {
 
   const needle = target.trim().toUpperCase();
   const matches = items.filter((i) => (i.payload.registration || '').toUpperCase() === needle);
+
+  for (const m of matches) {
+    if (m.lat == null || m.lng == null) continue;
+    recordPosition({
+      registration: needle,
+      icao24: m.payload.icao24 || m.id,
+      timestamp: m.timestamp,
+      lat: m.lat,
+      lng: m.lng,
+      alt_m: m.payload.alt,
+      heading: m.payload.heading,
+      speed_knots: m.payload.speed_knots,
+      callsign: m.payload.callsign,
+      grounded: m.payload.grounded,
+    });
+  }
 
   return {
     fingerprint: matches.map((i) => `icao24:${i.payload.icao24 || i.id}`),
