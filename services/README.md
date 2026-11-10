@@ -11,6 +11,7 @@ services/
   modules/
     trust-safety/         background verification, fraud/risk, platform T&S, cybersec
     [planned] gov-intelligence/   government / law enforcement — the Gotham-alternative surface
+    [planned] flight-intelligence/   flight tracking, asset intelligence, air intelligence support
 ```
 
 **The rule:** before building module-specific logic, check whether the
@@ -28,7 +29,13 @@ clearest example so far: the Ignorant tool was excluded from
 module's commercial context. A `gov-intelligence` module operating under
 actual legal authority may have a legitimately different answer — that
 needs its own explicit decision, never inherited silently from another
-module's policy.
+module's policy. Three modules are now planned: `trust-safety` (built),
+`gov-intelligence` (the Gotham-alternative surface, for government/law
+enforcement), and `flight-intelligence` (flight tracking, asset
+intelligence, and other Air Intelligence support). `flight-intelligence`
+already has real foundation to build on — `intel-core`'s `flights.ts`
+(adsb.lol) and `satellites.ts` (Celestrak) are live sources today — but
+no module-layer service exists for it yet.
 
 See each service's own README for what's built, what's a verified-working
 stub, and what's evaluated-and-held.
