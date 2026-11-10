@@ -1,0 +1,22 @@
+{
+  "name": "@osiris/flight-intelligence",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Flight Intelligence module — flight tracking watchlist/alerting and asset correlation, built on the intel-core foundation over HTTP. TG-facing first; also used by Ardhan's Spearhead and Rakesh programs.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.19.0",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=18.17"
+  }
+}
