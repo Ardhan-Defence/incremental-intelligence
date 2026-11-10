@@ -12,6 +12,15 @@ in place before this module existed:
    sightings via `entity-resolution`, writing the result into
    `../graph-store`.
 
+**Also explicitly out of scope:** RPAS (remotely piloted aircraft)
+trajectory planning/path prediction and payload/sensor telemetry
+unification, needed for Ardhan's Spearhead and Rakesh programs, is a
+different product — ingesting live telemetry from aircraft Ardhan
+operates, not watching public ADS-B broadcasts of other people's traffic.
+Deliberately not built here and not assumed to share code with this
+module; park as its own scoping exercise (telemetry protocol, ownership,
+threat model) before any work starts.
+
 ## Honest scope — what this is NOT
 
 - **Not a flight-plan/route database.** `intel-core`'s `flights` source
