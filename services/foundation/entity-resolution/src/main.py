@@ -27,6 +27,12 @@ class EntityRecord(BaseModel):
     domain: str | None = None
     phone: str | None = None
     email: str | None = None
+    # Aircraft/asset identifiers (flight-intelligence). All exact-match —
+    # these are structured codes (ICAO hex, registration mark, operator/
+    # callsign prefix), not free text that benefits from fuzzy comparison.
+    registration: str | None = None
+    icao24: str | None = None
+    operator_code: str | None = None
 
 
 class ResolveRequest(BaseModel):
@@ -61,12 +67,17 @@ def build_linker(records: list[dict[str, Any]]) -> Linker:
             cl.ExactMatch("domain"),
             cl.ExactMatch("phone"),
             cl.EmailComparison("email"),
+            cl.ExactMatch("registration"),
+            cl.ExactMatch("icao24"),
+            cl.ExactMatch("operator_code"),
         ],
         blocking_rules_to_generate_predictions=[
             block_on("domain"),
             block_on("phone"),
             block_on("email"),
             block_on("father_name"),
+            block_on("registration"),
+            block_on("icao24"),
         ],
     )
     db_api = DuckDBAPI()
@@ -126,7 +137,7 @@ async def resolve(req: ResolveRequest):
     except Exception as e:
         print(f"[entity-resolution] u-training skipped: {e}")
 
-    for key in ("domain", "phone", "email", "father_name"):
+    for key in ("domain", "phone", "email", "father_name", "registration", "icao24"):
         try:
             linker.training.estimate_parameters_using_expectation_maximisation(block_on(key))
         except Exception as e:
@@ -191,7 +202,7 @@ def deterministic_match_fallback(records: list[dict[str, Any]]) -> pd.DataFrame:
         for right in records[i + 1:]:
             shared = any(
                 left.get(field) and left.get(field) == right.get(field)
-                for field in ("domain", "phone", "email", "address")
+                for field in ("domain", "phone", "email", "address", "registration", "icao24")
             )
             if shared:
                 rows.append({"unique_id_l": left["unique_id"], "unique_id_r": right["unique_id"], "match_probability": 1.0})
@@ -252,7 +263,7 @@ def write_matches_to_graph(records: list[dict[str, Any]], matches: list[dict[str
                 "MERGE (e:Entity {id: $entity_id})",
                 entity_id=entity_id,
             )
-            for field in ("domain", "phone", "email", "father_name", "address"):
+            for field in ("domain", "phone", "email", "father_name", "address", "registration", "icao24", "operator_code"):
                 value = record.get(field)
                 if not value:
                     continue

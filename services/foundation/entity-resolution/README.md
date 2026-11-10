@@ -4,9 +4,15 @@ Separate Python/FastAPI service wrapping Splink (MIT, UK Ministry of
 Justice, actively maintained — the recommended pick from the correlation
 tool review over Zingg, which needs Spark infra this scale doesn't
 justify). Takes a batch of records (name/father_name/address/domain/phone/
-email) and returns probabilistic match pairs — "these two records likely
-describe the same real-world entity" — optionally writing the result into
-`../graph-store`.
+email/registration/icao24/operator_code) and returns probabilistic match
+pairs — "these two records likely describe the same real-world entity" —
+optionally writing the result into `../graph-store`.
+
+`registration`/`icao24`/`operator_code` are aircraft identifiers used by
+`../../modules/flight-intelligence` — all exact-match (structured codes,
+not free text), added for the same reason as every other correlation
+field: a caller that already has them passes them in, this service doesn't
+derive them.
 
 `father_name` and `address` are correlation fields only — nothing in this
 system looks them up from an external source. A caller that already has
@@ -31,8 +37,8 @@ NEO4J_PASSWORD=<your-password> .venv/bin/uvicorn src.main:app --host 0.0.0.0 --p
 service works standalone (match-probability only, no write) without it.
 
 - `GET /health`
-- `POST /v1/resolve` — body: `{"records": [{"unique_id": "1", "name": "...", "father_name": "...", "address": "...", "domain": "...", "phone": "...", "email": "..."}, ...], "write_to_graph": false}`
-- `GET /v1/entity/lookup?value=<x>&type=<domain|phone|email|name|father_name|address>` — returns the resolved Entity owning that identifier and every other identifier merged onto it, read live from the graph.
+- `POST /v1/resolve` — body: `{"records": [{"unique_id": "1", "name": "...", "father_name": "...", "address": "...", "domain": "...", "phone": "...", "email": "...", "registration": "...", "icao24": "...", "operator_code": "..."}, ...], "write_to_graph": false}`
+- `GET /v1/entity/lookup?value=<x>&type=<domain|phone|email|name|father_name|address|registration|icao24|operator_code>` — returns the resolved Entity owning that identifier and every other identifier merged onto it, read live from the graph.
 
 ## How it works
 
@@ -105,6 +111,15 @@ them.
   `address` and doesn't silently fuzzy-match it. Both outcomes confirmed
   directly via `cypher-shell`, and `/v1/entity/lookup?type=father_name` and
   `?type=address` both resolved correctly against the written graph.
+- `registration`/`icao24`/`operator_code`, verified live against real
+  air traffic (not synthetic data): a currently-airborne aircraft's
+  registration resolved, wrote correctly to the graph, and
+  `/v1/entity/lookup?type=icao24` returned it. Separately, two records
+  sharing one `icao24` but different `registration`/`operator_code`
+  (simulating the same airframe re-registered/sold) correctly matched at
+  probability 1.0 and merged onto one Entity with both registrations and
+  both operator codes surfaced — confirming the blocking-on-icao24 path
+  catches a registration change, not just an exact full-record repeat.
 
 ## Known limitations
 
